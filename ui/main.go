@@ -1,4 +1,4 @@
-package ui
+package main
 
 import (
 	"fmt"
@@ -10,15 +10,16 @@ import (
 	"github.com/google/gxui/drivers/gl"
 	"github.com/google/gxui/math"
 	"github.com/google/gxui/samples/flags"
-	"github.com/google/gxui/samples/file_dlg/roots"
 	"github.com/google/gxui/themes/light"
+	"github.com/KitlerUa/csvparser/parser"
 )
 
 var (
-	//fileColor      = gxui.Color{R: 0.7, G: 0.8, B: 1.0, A: 1}
-	fileColor = gxui.Black
-	//directoryColor = gxui.Color{R: 0.8, G: 1.0, B: 0.7, A: 1}
-	directoryColor = gxui.Black
+	fileColor = gxui.Color{R: 0.7, G: 0.8, B: 1.0, A: 1}
+	//fileColor = gxui.Black
+	directoryColor = gxui.Color{R: 0.8, G: 1.0, B: 0.7, A: 1}
+	//directoryColor = gxui.Black
+	filename string
 )
 
 // filesAt returns a list of all immediate files in the given directory path.
@@ -167,16 +168,48 @@ func (a directoryAdapter) Create(theme gxui.Theme, index int) gxui.Control {
 	l.SetColor(directoryColor)
 	return l
 }
-func CreateCustomTheme(driver gxui.Driver) gxui.Theme {
 
+// CreateCustomTheme for white background of windows
+func CreateCustomTheme(driver gxui.Driver) gxui.Theme {
 	return light.CreateTheme(driver)
 }
+
+func showSuccessWindow(driver gxui.Driver) {
+	theme := CreateCustomTheme(driver)
+	wnd := theme.CreateWindow(200, 50, "Success")
+	okButton := theme.CreateButton()
+	okButton.SetText("Ok")
+	okButton.OnClick(func(gxui.MouseEvent) {
+		wnd.Close()
+	})
+	wndLayout := theme.CreateLinearLayout()
+	//wndLayout.SetDirection(gxui.TopToBottom)
+	wndLayout.SetHorizontalAlignment(gxui.AlignCenter)
+	//wndLayout.SetVerticalAlignment(gxui.AlignMiddle)
+	wndLayout.AddChild(okButton)
+	//okButton.SetVerticalAlignment(gxui.AlignTop)
+	//okButton.SetHorizontalAlignment(gxui.AlignRight)
+	wnd.AddChild(wndLayout)
+}
+
+// Roots returns the list of drives avaliable on this machine.
+func Roots() []string {
+	roots := []string{}
+	for drive := 'A'; drive <= 'Z'; drive++ {
+		path := string(drive) + ":"
+		if _, err := os.Stat(path); err == nil {
+			roots = append(roots, path)
+		}
+	}
+	return roots
+}
+
 func appMain(driver gxui.Driver) {
 	//dark background
-	//theme := flags.CreateTheme(driver)
+	theme := flags.CreateTheme(driver)
 
 	//white background
-	theme := CreateCustomTheme(driver)
+	//theme := CreateCustomTheme(driver)
 
 	window := theme.CreateWindow(800, 600, "Open file...")
 	window.SetScale(flags.DefaultScaleFactor)
@@ -186,13 +219,19 @@ func appMain(driver gxui.Driver) {
 	fullpath := theme.CreateTextBox()
 	fullpath.SetDesiredWidth(math.MaxSize.W)
 
+	outputDir := theme.CreateTextBox()
+	outputDir.SetDesiredWidth(math.MaxSize.W)
+	outputDir.SetText("Choose output directory")
+
 	// directories is the Tree of directories on the left of the window.
 	// It uses the directoryAdapter to show the entire system's directory
 	// hierarchy.
 	directories := theme.CreateTree()
+
 	directories.SetAdapter(&directoryAdapter{
 		directory: directory{
-			subdirs: roots.Roots(),
+			path:    "C:",
+			subdirs: Roots(), // A: , c: ,  E: ....
 		},
 	})
 
@@ -204,22 +243,21 @@ func appMain(driver gxui.Driver) {
 	// files is the List of files in the selected directory to the right of the
 	// window.
 	files := theme.CreateList()
-	//files := theme.CreateDropDownList()
 	files.SetAdapter(filesAdapter)
 
 	open := theme.CreateButton()
 	open.SetText("Open")
 	open.OnClick(func(gxui.MouseEvent) {
-		// Logic for converting
-		// TODO
+
 		filename := fullpath.Text()
-		fmt.Println("filename - ",filename)
+		err := parser.Parse(filename, "")
+		if err != nil {
+			fmt.Println("err : ", err)
+		}
 
-		//XLSX(filename)
-		//csvparser.CSV(filename, ",")
-
+		showSuccessWindow(driver)
 		fmt.Printf("File '%s' selected!\n", files.Selected())
-		window.Close()
+		//window.Close()
 	})
 
 	// If the user hits the enter key while the fullpath control has focus,
@@ -240,6 +278,13 @@ func appMain(driver gxui.Driver) {
 		fullpath.SetText(dir)
 	})
 
+	// ????????
+	directories.OnClick(func(gxui.MouseEvent) {
+		directories.Selected()
+
+		fullpath.SetText("work")
+	})
+
 	// When the file selection changes, update the fullpath text
 	files.OnSelectionChanged(func(item gxui.AdapterItem) {
 		fullpath.SetText(item.(string))
@@ -254,13 +299,18 @@ func appMain(driver gxui.Driver) {
 					directories.Show(path)
 				}
 			} else {
+				filename := fullpath.Text()
+				err := parser.Parse(filename, "")
+				if err != nil {
+					fmt.Println("err : ", err)
+				}
 				fmt.Printf("File '%s' selected!\n", path)
-				window.Close()
+				//window.Close()
 			}
 		}
 	})
 
-	// Start with the CWD selected and visible.
+	//Start with the CWD selected and visible.
 	if cwd, err := os.Getwd(); err == nil {
 		if directories.Select(cwd) {
 			directories.Show(directories.Selected())
@@ -275,6 +325,9 @@ func appMain(driver gxui.Driver) {
 	topLayout := theme.CreateLinearLayout()
 	topLayout.SetDirection(gxui.TopToBottom)
 	topLayout.AddChild(fullpath)
+
+	topLayout.AddChild(outputDir) // ?????????????
+
 	topLayout.AddChild(splitter)
 
 	btmLayout := theme.CreateLinearLayout()
