@@ -22,3 +22,10 @@
 *.iml
 out
 gen
+/ui/List of Actions.xlsx
+/DP/
+/TWM/
+/FEMSA/
+/CV111/
+/ui/main.exe
+/config.json
